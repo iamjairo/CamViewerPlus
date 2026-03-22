@@ -113,7 +113,7 @@ in that file for details.
 ## Client app
 
 For the best experience (especially WebRTC mode), use the dedicated desktop
-client: [CamViewerPlus Client](https://github.com/Fanman03/CamViewerPlus-Client/)
+client: [CamViewerPlus Client](https://github.com/iamjairo/CamViewerPlus-Client/)
 
 ---
 
