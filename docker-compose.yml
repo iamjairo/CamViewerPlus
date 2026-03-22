@@ -1,0 +1,43 @@
+version: '3.9'
+
+services:
+
+  # MediaMTX: high-performance media server for RTSP -> HLS / WebRTC conversion.
+  # Configure camera paths in mediamtx.yml or let CamViewerPlus auto-register
+  # them via the API on port 9997.
+  #
+  # WebRTC / ICE note: if cameras or clients are behind NAT, add a TURN server
+  # to mediamtx.yml (webrtcICEServers2) so peers can traverse the NAT boundary.
+  mediamtx:
+    image: bluenviron/mediamtx:latest
+    container_name: camviewerplus-mediamtx
+    restart: unless-stopped
+    ports:
+      - "8554:8554"        # RTSP (TCP)
+      - "8554:8554/udp"    # RTSP (UDP)
+      - "8888:8888"        # HLS
+      - "8889:8889"        # WebRTC / WHEP
+      - "8189:8189/udp"    # WebRTC / SRTP (UDP)
+      - "9997:9997"        # Management API
+    volumes:
+      - ./mediamtx.yml:/mediamtx.yml:ro
+
+  # CamViewerPlus web UI
+  camviewerplus:
+    build: .
+    container_name: camviewerplus
+    restart: unless-stopped
+    ports:
+      - "6900:6900"        # JSMpeg WebSocket (legacy mode only)
+      - "6980:6980"        # Web UI
+      - "3000:3000"        # Client-notification WebSocket
+    environment:
+      # Override MediaMTX API URL when using bridge networking
+      - MEDIAMTX_API_URL=http://camviewerplus-mediamtx:9997
+    volumes:
+      - camviewerplus-config:/usr/src/camviewerplus/conf
+    depends_on:
+      - mediamtx
+
+volumes:
+  camviewerplus-config:

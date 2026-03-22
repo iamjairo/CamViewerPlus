@@ -26,6 +26,7 @@
     <script src="/js/panzoom.min.js"></script>
     <script src="/js/bootstrap.bundle.min.js"></script>
     <script src="{{{ scriptUrl }}}"></script>
+    <script src="/js/hls.min.js"></script>
     {{#if kioskMode}}
     <button class="cta-fixed" onClick="reloadPage()">
         <i class="bi bi-arrow-repeat circled-icon reloadPage" title="Reload"></i>
@@ -73,14 +74,24 @@
                     </div>
                     <h5 class="mt-3">Keep Screen Awake</h5>
                     <div class="form-check form-switch">
-                        <input class="form-check-input" type="checkbox" role="switch" id="keepAwakeSwitch" onclick='setKeepAwake(this);'>
+                        <input class="form-check-input" type="checkbox" role="switch" id="keepAwakeSwitch" onclick="setKeepAwake(this);">
                         <label class="form-check-label" for="flexSwitchCheckChecked" id="keepAwakeSwitchLabel"></label>
                     </div>
                     <h5 class="mt-3">Kiosk Mode</h5>
                     <p>
                         <a class="btn btn-primary" href="/kiosk">Switch to Kiosk Mode</a>
                     </p>
-                    <h5 class="mt-3">Transport Protocol<span><i class="bi bi-info-circle info-icon" title="Requires service restart to take effect"></i></span></h5>
+                    <h5 class="mt-3">Stream Mode<span><i class="bi bi-info-circle info-icon" title="HLS/WebRTC require MediaMTX. JSMpeg is the legacy built-in mode. Requires service restart to take effect."></i></span></h5>
+                    <div class="dropdown">
+                        <button class="btn btn-primary dropdown-toggle" type="button" id="streamModeBtn"
+                            data-bs-toggle="dropdown" aria-expanded="false"></button>
+                        <ul class="dropdown-menu" aria-labelledby="streamModeBtn">
+                            <li><a class="dropdown-item" href="/setConfig/streamMode/hls" id="hlsItem">HLS (via MediaMTX, recommended)</a></li>
+                            <li><a class="dropdown-item" href="/setConfig/streamMode/webrtc" id="webrtcItem">WebRTC (via MediaMTX, lowest latency)</a></li>
+                            <li><a class="dropdown-item" href="/setConfig/streamMode/jsmpeg" id="jsmpegItem">JSMpeg (legacy, built-in)</a></li>
+                        </ul>
+                    </div>
+                    <h5 class="mt-3">Transport Protocol<span><i class="bi bi-info-circle info-icon" title="JSMpeg mode only. Requires service restart to take effect."></i></span></h5>
                     <div class="dropdown">
                         <button class="btn btn-primary dropdown-toggle" type="button" id="transportMode"
                             data-bs-toggle="dropdown" aria-expanded="false"></button>
@@ -89,7 +100,7 @@
                             <li><a class="dropdown-item" href="/setConfig/transportProtocol/udp" id="udpItem">UDP (lower quality, less data usage)</a></li>
                         </ul>
                     </div>
-                    <h5 class="mt-3">Video Quality<span><i class="bi bi-info-circle info-icon" title="Requires service restart to take effect"></i></span></h5>
+                    <h5 class="mt-3">Video Quality<span><i class="bi bi-info-circle info-icon" title="JSMpeg mode only. Requires service restart to take effect."></i></span></h5>
                     <div class="dropdown">
                         <button class="btn btn-primary dropdown-toggle" type="button" id="videoQuality"
                             data-bs-toggle="dropdown" aria-expanded="false"></button>
@@ -120,6 +131,9 @@
     {{{body}}}
     <script>
         const streamPort = {{{ streamPort }}};
+        const streamMode = "{{{ streamMode }}}";
+        const mediamtxHlsPort = "{{{ mediamtxHlsPort }}}";
+        const mediamtxWebRTCPort = "{{{ mediamtxWebRTCPort }}}";
 
         {{#if keepAwake}}
         const keepAwake = {{{ keepAwake }}};
@@ -141,8 +155,7 @@
 
         const pzargs = {minZoom: 1, bounds: false, boundsPadding: 0.5};
 
-        let activeCanvas;
-
+        let activeStreamEl;
         let activePz;
 
         const availableGrids = [{{{ availableGrids }}}].sort(function (a, b) {
@@ -156,246 +169,299 @@
         const thisGrid = {{{ thisGrid }}};
         const defaultGrid = {{{ defaultGrid }}};
 
+        // HLS stream initialiser
+        function initHLS(videoEl, streamId) {
+            const hlsUrl = window.location.protocol + "//" + location.hostname + ":" + mediamtxHlsPort + "/cam" + streamId + "/index.m3u8";
+            if (typeof Hls !== "undefined" && Hls.isSupported()) {
+                const hls = new Hls({
+                    lowLatencyMode: true,
+                    liveSyncDurationCount: 3,
+                    liveMaxLatencyDurationCount: 6,
+                    maxLiveSyncPlaybackRate: 1.5,
+                });
+                hls.loadSource(hlsUrl);
+                hls.attachMedia(videoEl);
+                hls.on(Hls.Events.ERROR, function(event, data) {
+                    if (data.fatal) {
+                        console.warn("HLS fatal error for cam" + streamId + ":", data.type, data.details);
+                        showVideoError(videoEl);
+                    }
+                });
+                videoEl.play().catch(function() {});
+            } else if (videoEl.canPlayType("application/vnd.apple.mpegurl")) {
+                videoEl.src = hlsUrl;
+                videoEl.play().catch(function() {});
+            } else {
+                showVideoError(videoEl);
+            }
+        }
+
+        // WebRTC (WHEP) stream initialiser
+        async function initWebRTC(videoEl, streamId) {
+            const whepUrl = window.location.protocol + "//" + location.hostname + ":" + mediamtxWebRTCPort + "/cam" + streamId + "/whep";
+            try {
+                const pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
+                pc.addTransceiver("video", { direction: "recvonly" });
+                pc.addTransceiver("audio", { direction: "recvonly" });
+                pc.ontrack = function(e) {
+                    if (e.streams && e.streams[0]) {
+                        videoEl.srcObject = e.streams[0];
+                        videoEl.play().catch(function() {});
+                    }
+                };
+                const offer = await pc.createOffer();
+                await pc.setLocalDescription(offer);
+                const response = await fetch(whepUrl, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/sdp" },
+                    body: offer.sdp
+                });
+                if (response.ok) {
+                    const answerSdp = await response.text();
+                    await pc.setRemoteDescription({ type: "answer", sdp: answerSdp });
+                } else {
+                    showVideoError(videoEl);
+                }
+            } catch (err) {
+                showVideoError(videoEl);
+            }
+        }
+
+        // Replace canvas with video element for HLS/WebRTC modes
+        function upgradeToVideo(canvas) {
+            const video = document.createElement("video");
+            // Copy all data-* attributes from the canvas
+            Object.assign(video.dataset, canvas.dataset);
+            video.dataset.expanded = "false";
+            video.autoplay    = true;
+            video.muted       = true;
+            video.playsInline = true;
+            $(video).addClass("stream-el");
+            $(video).width($(canvas).data("width")  + "vw");
+            $(video).height($(canvas).data("height") + "vh");
+            $(canvas).replaceWith(video);
+            return video;
+        }
+
+        // Error overlay for video elements
+        function showVideoError(videoEl) {
+            const wrapper = videoEl.parentElement;
+            if (!wrapper) return;
+            const overlay = document.createElement("div");
+            overlay.className = "stream-error-overlay";
+            overlay.innerHTML = "<i class=\"bi bi-camera-video-off\"></i><span>No camera assigned</span>";
+            wrapper.style.position = "relative";
+            wrapper.appendChild(overlay);
+        }
+
         $(document).ready(function () {
             if (keepAwake == true) {
-                $('#keepAwakeSwitch').prop('checked', true);
-                $('#keepAwakeSwitchLabel').text('Enabled');
+                $("#keepAwakeSwitch").prop("checked", true);
+                $("#keepAwakeSwitchLabel").text("Enabled");
             } else {
-                $('#keepAwakeSwitch').prop('checked', false);
-                $('#keepAwakeSwitchLabel').text('Disabled');
+                $("#keepAwakeSwitch").prop("checked", false);
+                $("#keepAwakeSwitchLabel").text("Disabled");
             }
 
-            if(transportProtocol == "tcp") {
+            if (transportProtocol == "tcp") {
                 $("#transportMode").text("TCP");
                 $("#tcpItem").addClass("dropdown-item-selected");
-            } else if (transportProtocol == "udp"){
+            } else if (transportProtocol == "udp") {
                 $("#transportMode").text("UDP");
-                $("#udpItem").addClass("dropdown-item-selected"); 
+                $("#udpItem").addClass("dropdown-item-selected");
             }
 
             $("#videoQuality").text(quality);
 
-            var hash = $(location).prop('hash');
-            if(hash === "#settings") {
-                $("#settings").show();
+            if (streamMode === "hls") {
+                $("#streamModeBtn").text("HLS");
+                $("#hlsItem").addClass("dropdown-item-selected");
+            } else if (streamMode === "webrtc") {
+                $("#streamModeBtn").text("WebRTC");
+                $("#webrtcItem").addClass("dropdown-item-selected");
+            } else {
+                $("#streamModeBtn").text("JSMpeg");
+                $("#jsmpegItem").addClass("dropdown-item-selected");
             }
+
+            var hash = $(location).prop("hash");
+            if (hash === "#settings") { $("#settings").show(); }
 
             const queryString = window.location.search;
             const urlParams = new URLSearchParams(queryString);
-            const clientName = urlParams.get('cl')
+            const clientName = urlParams.get("cl");
 
-            if(clientName == "cvpc"){
+            if (clientName == "cvpc") {
                 $("#selectedGridTitle").hide();
                 $("#selectedGridDropdown").hide();
                 $("#cvpc-banner").hide();
                 $("#defaultGridTitle").removeClass("mt-3");
-                
-                $('.dropdown-item').each(function(i, obj) {
-                    var oldUrl = $(this).attr("href");
-                    var newUrl = oldUrl + "/cvpc";
-                    $(this).attr("href",newUrl);
+                $(".dropdown-item").each(function(i, obj) {
+                    $(this).attr("href", $(this).attr("href") + "/cvpc");
                 });
             }
 
             const safeUrl = encodeURIComponent(window.location.href);
-            $("#restartClientsBtn").attr("href","/restartClients?c=" + safeUrl);
+            $("#restartClientsBtn").attr("href", "/restartClients?c=" + safeUrl);
 
-        });
+            // Initialise all stream slots
+            $("canvas").each(function () {
+                const canvas = this;
+                const id = $(canvas).data("id");
 
-        function setKeepAwake(box) {
-            const queryString = window.location.search;
-            const urlParams = new URLSearchParams(queryString);
-            const clientName = urlParams.get('cl')
-            if(clientName == "cvpc"){
-                window.location.href = window.location.protocol+'//'+window.location.host+ "/setConfig/keepAwake/" + box.checked + "/cvpc";
-            } else {
-                window.location.href = window.location.protocol+'//'+window.location.host+ "/setConfig/keepAwake/" + box.checked;
-            }
-        }
+                if (streamMode === "hls") {
+                    const video = upgradeToVideo(canvas);
+                    initHLS(video, id);
 
-        $("canvas").each(function () {
-            let thisId = $(this).data("id");
-            let thisCanvas = document.querySelector('[data-id="' + thisId + '"]');
-            let thisNotInit = true;
-            let wsString = 'ws://' + location.hostname + ':' + streamPort + '/api/stream/' + thisId;
+                } else if (streamMode === "webrtc") {
+                    const video = upgradeToVideo(canvas);
+                    initWebRTC(video, id);
 
-            let testWs = new WebSocket(wsString);
-            
-            $(this).width($(this).data("width") + "vw");
-            $(this).height($(this).data("height") + "vh");
-
-            setTimeout(function() {
-                showError(thisCanvas);
-            }, 4000)
-
-            testWs.onmessage  = function() {
-                if(thisNotInit){
-                    let thisPlayer = new JSMpeg.Player(
-                        wsString,
-                        {
-                        canvas: thisCanvas,
-                        audio: false,
-                        chunkSize: 1280 * 720,
-                        videoBufferSize: 102410248
-                        }
-                    );
-
-                    $(this).attr("data-expanded", "false");
-                    thisNotInit = false;
                 } else {
-                    testWs.close();
+                    // Legacy JSMpeg mode
+                    let thisNotInit = true;
+                    const wsString  = "ws://" + location.hostname + ":" + streamPort + "/api/stream/" + id;
+
+                    $(canvas).width($(canvas).data("width")  + "vw");
+                    $(canvas).height($(canvas).data("height") + "vh");
+                    $(canvas).attr("data-expanded", "false");
+
+                    setTimeout(function() { showCanvasError(canvas); }, 4000);
+
+                    const testWs = new WebSocket(wsString);
+                    testWs.onmessage = function() {
+                        if (thisNotInit) {
+                            new JSMpeg.Player(wsString, {
+                                canvas: canvas,
+                                audio: false,
+                                chunkSize: 1280 * 720,
+                                videoBufferSize: 102410248
+                            });
+                            thisNotInit = false;
+                        } else {
+                            testWs.close();
+                        }
+                    };
                 }
-            };
+            });
         });
 
-        function showError(canvas) {
-            try{
+        // Canvas error drawing (JSMpeg mode)
+        function showCanvasError(canvas) {
+            try {
                 var ctx = canvas.getContext("2d");
                 ctx.fillStyle = "black";
-                ctx.fillRect(0,0,canvas.width,canvas.height);
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
                 const x = canvas.width / 2;
-
                 ctx.strokeStyle = "#50525e";
-                let path = new Path2D("M0 5a2 2 0 0 1 2-2h7.5a2 2 0 0 1 1.983 1.738l3.11-1.382A1 1 0 0 1 16 4.269v7.462a1 1 0 0 1-1.406.913l-3.111-1.382A2 2 0 0 1 9.5 13H2a2 2 0 0 1-2-2V5zm11.5 5.175 3.5 1.556V4.269l-3.5 1.556v4.35zM2 4a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h7.5a1 1 0 0 0 1-1V5a1 1 0 0 0-1-1H2z");
+                let p = new Path2D("M0 5a2 2 0 0 1 2-2h7.5a2 2 0 0 1 1.983 1.738l3.11-1.382A1 1 0 0 1 16 4.269v7.462a1 1 0 0 1-1.406.913l-3.111-1.382A2 2 0 0 1 9.5 13H2a2 2 0 0 1-2-2V5zm11.5 5.175 3.5 1.556V4.269l-3.5 1.556v4.35zM2 4a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h7.5a1 1 0 0 0 1-1V5a1 1 0 0 0-1-1H2z");
                 ctx.translate(134, 55);
                 ctx.scale(2, 2);
-                ctx.stroke(path);
+                ctx.stroke(p);
                 ctx.resetTransform();
-
                 ctx.beginPath();
                 ctx.arc(x, 70, 25, 0, 2 * Math.PI);
-                ctx.moveTo(132,53);
-                ctx.lineTo(165,90);
+                ctx.moveTo(132, 53);
+                ctx.lineTo(165, 90);
                 ctx.lineWidth = 1.5;
                 ctx.stroke();
-
                 ctx.fillStyle = "#50525e";
-                ctx.textAlign = 'center';
+                ctx.textAlign = "center";
                 ctx.font = "12px Segoe UI";
                 ctx.fillText("No camera assigned", x, 110);
-            } catch {
-
-            }
+            } catch(e) {}
         }
 
-        function minimizeView(canvas) {
-
-        }
-
-        $("canvas").mouseup(function () {
-            if ($(this).attr("data-expanded") === 'true') {
-
-            } else {
-                $(this).attr("style", "position: fixed; top: 0; left: 0; height: 100vh; width: 100vw;")
-                $(this).attr("data-expanded", "true");
-
-                activePz = panzoom(this,pzargs);
-
-                $(".minView").show();
-                $(".shade").show();
-
-                activeCanvas = this;
-            }
+        // Expand on click (canvas or video.stream-el)
+        $(document).on("mouseup", "canvas[data-expanded], video.stream-el", function () {
+            if ($(this).attr("data-expanded") === "true") { return; }
+            $(this).css({ position: "fixed", top: 0, left: 0, height: "100vh", width: "100vw" });
+            $(this).attr("data-expanded", "true");
+            activePz = panzoom(this, pzargs);
+            $(".minView").show();
+            $(".shade").show();
+            activeStreamEl = this;
         });
 
-        $(document).on(
-            'keydown', function(event) {
-                if (event.key == "Escape") {
-                    minimizePopout();
-                }
+        $(document).on("keydown", function(event) {
+            if (event.key == "Escape") { minimizePopout(); }
         });
 
-        $(".minView").click(function () {
-            minimizePopout();
-        });
+        $(".minView").click(function () { minimizePopout(); });
 
         function minimizePopout() {
-            activePz.dispose();
-
-            $(activeCanvas).attr("style", "transform: 0;");
-            $(activeCanvas).width($(activeCanvas).data("width") + "vw");
-            $(activeCanvas).height($(activeCanvas).data("height") + "vh");
-            $(activeCanvas).attr("data-expanded", "false");
-
+            if (!activeStreamEl) return;
+            if (activePz) activePz.dispose();
+            $(activeStreamEl).attr("style", "transform: 0;");
+            $(activeStreamEl).width($(activeStreamEl).data("width")  + "vw");
+            $(activeStreamEl).height($(activeStreamEl).data("height") + "vh");
+            $(activeStreamEl).attr("data-expanded", "false");
             $(".minView").hide();
             $(".shade").hide();
-            let thisActiveCanvas = activeCanvas;
         }
 
         $(".reloadPage").click(function () {
             $(".reloadPage").addClass("icon-spin");
-            setTimeout(function(){
-            window.location.reload(1);
-            }, 500);
+            setTimeout(function() { window.location.reload(1); }, 500);
         });
 
-        $(".showSettings").click(function () {
-            $("#settings").show();
-        });
+        $(".showSettings").click(function () { $("#settings").show(); });
 
         $(".toggleFullscreen").mouseup(function () {
             if ((screen.availHeight || screen.height - 30) <= window.innerHeight) {
                 document.exitFullscreen();
-                $(".toggleFullscreen").addClass("bi-arrows-angle-expand");
-                $(".toggleFullscreen").removeClass("bi-arrows-angle-contract");
-                $(".toggleFullscreen").attr("title", "Enter fullscreen");
+                $(".toggleFullscreen").addClass("bi-arrows-angle-expand").removeClass("bi-arrows-angle-contract").attr("title", "Enter fullscreen");
             } else {
                 document.documentElement.requestFullscreen();
-                $(".toggleFullscreen").removeClass("bi-arrows-angle-expand");
-                $(".toggleFullscreen").addClass("bi-arrows-angle-contract");
-                $(".toggleFullscreen").attr("title", "Leave fullscreen");
+                $(".toggleFullscreen").removeClass("bi-arrows-angle-expand").addClass("bi-arrows-angle-contract").attr("title", "Leave fullscreen");
             }
         });
 
         $(".thornhill-logo").on({
-            mouseenter: function () {
-                $(".thornhill-logo").attr("src","/assets/thornhill.png");
-            },
-            mouseleave: function () {
-                $(".thornhill-logo").attr("src","/assets/camviewer.png");
-            }
+            mouseenter: function () { $(".thornhill-logo").attr("src", "/assets/thornhill.png"); },
+            mouseleave: function () { $(".thornhill-logo").attr("src", "/assets/camviewer.png"); }
         });
 
-        $(".closeSettings").click(function () {
-            $("#settings").hide();
-        });
+        $(".closeSettings").click(function () { $("#settings").hide(); });
 
         availableGrids.forEach((e) => {
             if (e === defaultGrid) {
-                $('#gridTitle').text(e);
-                $('#grid-menu').append('<li><a class="dropdown-item dropdown-item-selected" href="/setConfig/gridType/'+e+'">'+e+'</a></li>');
+                $("#gridTitle").text(e);
+                $("#grid-menu").append("<li><a class=\"dropdown-item dropdown-item-selected\" href=\"/setConfig/gridType/" + e + "\">" + e + "</a></li>");
             } else {
-                $('#grid-menu').append('<li><a class="dropdown-item" href="/setConfig/gridType/'+e+'">'+e+'</a></li>');
+                $("#grid-menu").append("<li><a class=\"dropdown-item\" href=\"/setConfig/gridType/" + e + "\">" + e + "</a></li>");
             }
             if (e === thisGrid) {
-                $('#gridTitleSelected').text(e);
-                $('#grid-menu-selected').append('<li><a class="dropdown-item dropdown-item-selected" href="/grids/'+e+'">'+e+'</a></li>');
+                $("#gridTitleSelected").text(e);
+                $("#grid-menu-selected").append("<li><a class=\"dropdown-item dropdown-item-selected\" href=\"/grids/" + e + "\">" + e + "</a></li>");
             } else {
-                $('#grid-menu-selected').append('<li><a class="dropdown-item" href="/grids/'+e+'">'+e+'</a></li>');
+                $("#grid-menu-selected").append("<li><a class=\"dropdown-item\" href=\"/grids/" + e + "\">" + e + "</a></li>");
             }
         });
 
-        $('#gridType').on('change', function () {
-            window.location.href = window.location.href + "setConfig/gridType/" + this.value;
-        });
-
-        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
-        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-            return new bootstrap.Tooltip(tooltipTriggerEl)
-        })
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll("[data-bs-toggle=\"tooltip\"]"));
+        tooltipTriggerList.map(function (el) { return new bootstrap.Tooltip(el); });
 
         let thisUrl = new URL(window.location);
         let webSocket = new WebSocket("ws://" + thisUrl.hostname + ":3000");
-        let el;
-
         webSocket.onmessage = (event) => {
-            if(event.data == "service_restart") {
-                const safeUrl = encodeURIComponent(window.location.href);
-                document.location.href="/restarting?c=" + safeUrl;
+            if (event.data == "service_restart") {
+                document.location.href = "/restarting?c=" + encodeURIComponent(window.location.href);
             } else if (event.data == "client_restart") {
                 window.location.reload(1);
             }
         };
+
+        function setKeepAwake(box) {
+            const urlParams = new URLSearchParams(window.location.search);
+            const clientName = urlParams.get("cl");
+            const base = window.location.protocol + "//" + window.location.host;
+            if (clientName == "cvpc") {
+                window.location.href = base + "/setConfig/keepAwake/" + box.checked + "/cvpc";
+            } else {
+                window.location.href = base + "/setConfig/keepAwake/" + box.checked;
+            }
+        }
     </script>
 </body>
 
