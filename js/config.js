@@ -99,4 +99,12 @@ function setQuality(quality) {
     fs.writeFileSync('./conf/config.json', JSON.stringify(content));
 }
 
-module.exports = { get, getAsync, getGrids, getGridsSync, setGridType, setKeepAwake, setTransportProtocol, setQuality }
+function setStreamMode(mode) {
+    let content = JSON.parse(fs.readFileSync('./conf/config.json', 'utf8'));
+
+    content.settings.streamMode = mode;
+
+    fs.writeFileSync('./conf/config.json', JSON.stringify(content));
+}
+
+module.exports = { get, getAsync, getGrids, getGridsSync, setGridType, setKeepAwake, setTransportProtocol, setQuality, setStreamMode }

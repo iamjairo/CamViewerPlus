@@ -1,0 +1,56 @@
+###############################################################################
+# mediamtx.yml – CamViewerPlus configuration template for MediaMTX
+#
+# MediaMTX (https://github.com/bluenviron/mediamtx) converts your RTSP camera
+# feeds to HLS and WebRTC so CamViewerPlus can display them with very low
+# latency in any modern browser.
+#
+# Usage:
+#   1. Copy this file to the same directory as docker-compose.yml.
+#   2. Add your camera sources under the `paths:` section.
+#   3. Set `streamMode` to "hls" or "webrtc" in CamViewerPlus config.json.
+#   4. Run:  docker compose up -d
+###############################################################################
+
+# Logging
+logLevel: info
+
+# RTSP server (accepts incoming streams / re-streams cameras)
+rtspAddress: :8554
+
+# HLS server – used when streamMode is "hls"
+hlsAddress: :8888
+hlsAlwaysRemux: yes
+hlsSegmentCount: 3
+hlsSegmentDuration: 1s
+hlsPartDuration: 200ms
+
+# WebRTC server – used when streamMode is "webrtc"
+webrtcAddress: :8889
+
+# HTTP / management API – CamViewerPlus uses this to register camera paths
+api: yes
+apiAddress: :9997
+
+###############################################################################
+# Camera paths
+#
+# Add one entry per camera.  The path name must match "cam{position}" where
+# {position} is the camera's `position` value in CamViewerPlus config.json
+# (0-based).
+#
+# CamViewerPlus will attempt to register paths automatically via the API when
+# it starts, so you only need to edit this section if you prefer static config
+# or if the API auto-registration fails.
+#
+# Example for a 4-camera setup:
+###############################################################################
+paths:
+  cam0:
+    source: rtsp://user:password@192.168.1.10:554/stream
+  cam1:
+    source: rtsp://user:password@192.168.1.11:554/stream
+  cam2:
+    source: rtsp://user:password@192.168.1.12:554/stream
+  cam3:
+    source: rtsp://user:password@192.168.1.13:554/stream

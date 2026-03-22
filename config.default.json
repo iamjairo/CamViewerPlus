@@ -1,7 +1,11 @@
 {
     "settings": {
         "gridType": "4",
-        "keepAwake":true,
+        "keepAwake": true,
+        "streamMode": "hls",
+        "mediamtxApiUrl": "http://localhost:9997",
+        "mediamtxHlsPort": "8888",
+        "mediamtxWebRTCPort": "8889",
         "cameras": [
             {
                 "position": "0",
@@ -22,7 +26,7 @@
         ],
         "streamPort": "6900",
         "uiPort": "6980",
-        "transportProtocol":"tcp",
-        "quality":"3"
+        "transportProtocol": "tcp",
+        "quality": "3"
     }
 }

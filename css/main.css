@@ -240,7 +240,34 @@ a {
     margin-left: 6px;
 }
 
-.loading:after {
+.stream-el {
+    object-fit: contain;
+    background-color: black;
+    display: block;
+}
+
+.stream-error-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: black;
+    color: #50525e;
+}
+
+.stream-error-overlay i {
+    font-size: 2rem;
+}
+
+.stream-error-overlay span {
+    font-size: 12px;
+    margin-top: 8px;
+}
     content: '.';
     animation: dots 1s steps(5, end) infinite;}
   
