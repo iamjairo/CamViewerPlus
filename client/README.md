@@ -1,6 +1,8 @@
 # CamViewerPlus Client
 An ElectronJS client optimized for CamViewerPlus with WebRTC / RTSP live-streaming support via [MediaMTX](https://github.com/bluenviron/mediamtx).
 
+This client now lives inside the main CamViewerPlus repository under `/client`.
+
 ## Features
 - WebRTC (WHEP) live-streaming — smooth, low-latency video via MediaMTX
 - H.264 / HEVC hardware-accelerated video decoding

@@ -44,11 +44,11 @@
   },
   "dependencies": {
     "about-window": "^1.15.2",
-    "bootstrap": "^5.2.2",
+    "bootstrap": "^5.3.8",
     "electron-prompt": "^1.7.0",
     "fs-jetpack": "^4.1.0",
-    "node-cron": "^3.0.2",
-    "request": "^2.88.2"
+    "node-cron": "^4.2.1",
+    "node-fetch": "^2.7.0"
   },
   "devDependencies": {
     "@babel/core": "^7.5.5",

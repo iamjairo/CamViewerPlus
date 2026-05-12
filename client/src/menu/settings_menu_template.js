@@ -5,7 +5,7 @@ import { DEFAULT_CONFIG } from "../helpers/config";
 
 const prompt = require('electron-prompt');
 const fs = require('fs');
-const request = require('request');
+const fetch = require('node-fetch');
 
 const promptCss = __dirname + "/prompt.css";
 
@@ -141,17 +141,17 @@ function openGridPrompt() {
   const { path: configPath, data } = readConfig();
 
   const gridUrl = data.url + "/getGrids";
-  let options = { json: true };
-  request(gridUrl, options, (error, res, body) => {
-    if (error) {
-      new Notification({
-        title: "Error!",
-        body: "Unable to fetch available grids.",
-      }).show();
-      return;
-    }
-
-    if (res.statusCode == 200 && body != undefined && body.length > 0) {
+  fetch(gridUrl)
+    .then((res) => {
+      if (!res.ok) {
+        throw new Error("Invalid response status");
+      }
+      return res.json();
+    })
+    .then((body) => {
+      if (body == undefined || body.length === 0) {
+        throw new Error("No grids returned");
+      }
       const selectOptions = { "-1": "Server default" };
       body.forEach(e => {
         selectOptions[e] = e;
@@ -179,8 +179,13 @@ function openGridPrompt() {
             body: "Unable to fetch available grids.",
           }).show();
         });
-    }
-  });
+    })
+    .catch(() => {
+      new Notification({
+        title: "Error!",
+        body: "Unable to fetch available grids.",
+      }).show();
+    });
 }
 
 function openSettings() {

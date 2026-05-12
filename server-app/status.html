@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CamViewerPlus Server Status</title>
+  <style>
+    body { font-family: sans-serif; margin: 16px; color: #222; }
+    h2 { margin-top: 0; }
+    .row { margin: 8px 0; }
+    .label { font-weight: 600; margin-right: 6px; }
+  </style>
+</head>
+<body>
+  <h2>CamViewerPlus Server App</h2>
+  <div class="row"><span class="label">Server:</span><span id="server">unknown</span></div>
+  <div class="row"><span class="label">MediaMTX:</span><span id="mediamtx">unknown</span></div>
+  <div class="row"><span class="label">Message:</span><span id="message">Waiting</span></div>
+  <script>
+    window.setStatus = function (state) {
+      document.getElementById('server').textContent = state.server;
+      document.getElementById('mediamtx').textContent = state.mediamtx;
+      document.getElementById('message').textContent = state.message || '';
+    };
+  </script>
+</body>
+</html>
