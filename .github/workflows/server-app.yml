@@ -1,37 +1,37 @@
 name: Server App CI
 
 on:
-  push:
-    branches: [master]
-    paths:
-      - "server-app/**"
-      - ".github/workflows/server-app.yml"
-  pull_request:
-    branches: [master]
-    paths:
-      - "server-app/**"
-      - ".github/workflows/server-app.yml"
+push:
+branches: [master]
+paths:
+- "server-app/**"
+- ".github/workflows/server-app.yml"
+pull_request:
+branches: [master]
+paths:
+- "server-app/**"
+- ".github/workflows/server-app.yml"
 
 permissions:
-  contents: read
+contents: read
 
 jobs:
-  build:
-    strategy:
-      matrix:
-        os: [ubuntu-latest, macos-latest]
-    runs-on: ${{ matrix.os }}
-    defaults:
-      run:
-        working-directory: server-app
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-          cache-dependency-path: server-app/package-lock.json
-      - name: Install dependencies
-        run: npm ci
-      - name: Build unpacked app
-        run: npm run build
+build:
+strategy:
+matrix:
+os: [ubuntu-latest, macos-latest]
+runs-on: ${{ matrix.os }}
+defaults:
+run:
+working-directory: server-app
+steps:
+- uses: actions/checkout@v4
+- uses: actions/setup-node@v4
+with:
+node-version: 22
+cache: npm
+cache-dependency-path: server-app/package-lock.json
+- name: Install dependencies
+run: npm ci
+- name: Build unpacked app
+run: npm run build
