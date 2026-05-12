@@ -144,7 +144,7 @@ function openGridPrompt() {
   fetch(gridUrl)
     .then((res) => {
       if (!res.ok) {
-        throw new Error("Invalid response status");
+        throw new Error(`Invalid response status: ${res.status}`);
       }
       return res.json();
     })
