@@ -5,14 +5,9 @@ const exphbs = require('express-handlebars');
 const path = require('path');
 const fs = require("fs");
 const config = require("../js/config");
-const { proxy, scriptUrl } = require('rtsp-relay')(app);
 const pjson = require('../package.json');
 var pm2 = require('pm2');
-
 var WebsocketServer = require("ws").Server;
-var wss  = new WebsocketServer({
-  port: 3000
-});
 
 function buildTemplateVars(configData, extra) {
     const streamMode = configData.settings.streamMode || 'jsmpeg';
@@ -30,8 +25,53 @@ function buildTemplateVars(configData, extra) {
     }, extra);
 }
 
+function validateConfigUpdate(option, value) {
+    if (option === "gridType") {
+        if (!/^\d+$/.test(value)) return false;
+        return fs.existsSync(path.join(__dirname, "../views", value + "-grid.hbs"));
+    }
+
+    if (option === "keepAwake") {
+        return value === "true" || value === "false";
+    }
+
+    if (option === "transportProtocol") {
+        return value === "tcp" || value === "udp";
+    }
+
+    if (option === "quality") {
+        if (!/^\d+$/.test(value)) return false;
+        const parsed = Number.parseInt(value, 10);
+        return parsed >= 1 && parsed <= 10;
+    }
+
+    if (option === "streamMode") {
+        return value === "hls" || value === "webrtc" || value === "jsmpeg";
+    }
+
+    return false;
+}
+
+function applyConfigUpdate(option, value) {
+    if (option === "gridType") {
+        config.setGridType(value);
+    } else if (option === "keepAwake") {
+        config.setKeepAwake(value);
+    } else if (option === "transportProtocol") {
+        config.setTransportProtocol(value);
+    } else if (option === "quality") {
+        config.setQuality(value);
+    } else if (option === "streamMode") {
+        config.setStreamMode(value);
+    }
+}
+
 function start() {
     let configData = config.get();
+    const wsPort = configData.settings.notificationPort || 3000;
+    const wss = new WebsocketServer({
+      port: wsPort
+    });
 
     app.engine('.hbs', exphbs.engine({ extname: '.hbs', defaultLayout: "main" }));
     app.set('view engine', 'hbs');
@@ -52,7 +92,7 @@ function start() {
     app.use('/favicon.ico', express.static(path.join(__dirname, '../assets/favicon.ico')));
 
     app.get('/', async (req, res) => {
-        let freshConfig = await config.get();
+        let freshConfig = config.get();
         let availableGrids = await config.getGrids();
         let gridName = freshConfig.settings.gridType + "-grid";
         res.render(gridName, buildTemplateVars(freshConfig, {
@@ -63,7 +103,7 @@ function start() {
     });
 
     app.get('/kiosk', async (req, res) => {
-        let freshConfig = await config.get();
+        let freshConfig = config.get();
         let availableGrids = await config.getGrids();
         let gridName = freshConfig.settings.gridType + "-grid";
         res.render(gridName, buildTemplateVars(freshConfig, {
@@ -75,7 +115,7 @@ function start() {
     });
 
     app.get('/grids/:grid', async (req, res) => {
-        let freshConfig = await config.get();
+        let freshConfig = config.get();
         let availableGrids = await config.getGrids();
         let gridName = req.params.grid + "-grid";
         if(fs.existsSync("./views/" + gridName + ".hbs")) {
@@ -90,7 +130,7 @@ function start() {
     });
 
     app.get('/kiosk/:grid', async (req, res) => {
-        let freshConfig = await config.get();
+        let freshConfig = config.get();
         let availableGrids = await config.getGrids();
         let gridName = req.params.grid + "-grid";
         if(fs.existsSync("./views/" + gridName + ".hbs")) {
@@ -108,17 +148,10 @@ function start() {
     app.get('/setConfig/:option/:value', async (req, res) => {
         let option = req.params.option;
         let value = req.params.value;
-        if (option === "gridType") {
-            config.setGridType(value);
-        } else if (option === "keepAwake") {
-            config.setKeepAwake(value);
-        } else if (option === "transportProtocol") {
-            config.setTransportProtocol(value);
-        } else if (option === "quality") {
-            config.setQuality(value);
-        } else if (option === "streamMode") {
-            config.setStreamMode(value);
+        if (!validateConfigUpdate(option, value)) {
+            return res.status(400).send("Invalid config option/value.");
         }
+        applyConfigUpdate(option, value);
 
         res.redirect("/#settings");
     });
@@ -127,17 +160,10 @@ function start() {
         let option = req.params.option;
         let value = req.params.value;
         let query = req.params.query;
-        if (option === "gridType") {
-            config.setGridType(value);
-        } else if (option === "keepAwake") {
-            config.setKeepAwake(value);
-        } else if (option === "transportProtocol") {
-            config.setTransportProtocol(value);
-        } else if (option === "quality") {
-            config.setQuality(value);
-        } else if (option === "streamMode") {
-            config.setStreamMode(value);
+        if (!validateConfigUpdate(option, value)) {
+            return res.status(400).send("Invalid config option/value.");
         }
+        applyConfigUpdate(option, value);
         if(query == "cvpc"){
             res.redirect("/?cl=cvpc#settings");
         } else {
@@ -146,8 +172,7 @@ function start() {
     });
 
     app.get('/getGrids', (req, res) => {
-        config.getGridsSync();
-        res.send(grids);
+        res.send(config.getGridsSync());
     });
 
     app.get('/restarting', (req, res) => {
@@ -155,6 +180,7 @@ function start() {
     });
 
     app.get("/restartService", (req, res)=> {
+        res.redirect("/restarting");
         wss.clients.forEach((client) => {
             client.send("service_restart");
         });
@@ -180,6 +206,7 @@ function start() {
 
     app.listen(configData.settings.uiPort, () => {
         console.log(`Web server listening on port ${configData.settings.uiPort}`);
+        console.log(`Notification WebSocket listening on port ${wsPort}`);
     });
 
     //404 route - MUST COME LAST

@@ -17,11 +17,11 @@ function get() {
 async function getAsync() {
     let data;
     try {
-        let rawFile = await fs.readFile('./conf/config.json');
+        let rawFile = await fs.promises.readFile('./conf/config.json');
         data = JSON.parse(rawFile);
     } catch {
-        let rawFile = await fs.readFile('./config.default.json');
-        fs.copyFileSync('./config.default.json', './conf/config.json')
+        let rawFile = await fs.promises.readFile('./config.default.json');
+        await fs.promises.copyFile('./config.default.json', './conf/config.json');
         data = JSON.parse(rawFile);
     }
     return data;
@@ -29,27 +29,14 @@ async function getAsync() {
 
 async function getGrids() {
     const gridsPath = path.join(__dirname, '../views');
-
-    let availableGrids = [];
-
-    await fs.readdir(gridsPath, function (err, files) {
-        //handling error
-        if (err) {
-            return console.log('Unable to scan directory: ' + err);
-        }
-        //listing all files using forEach
-        files.forEach(function (file) {
-            // Do whatever you want to do with the file
-            if (file.includes("-grid.hbs")) {
-                availableGrids.push(file.replace("-grid.hbs", ""));
-            }
-        });
-    });
-    return availableGrids;
+    const files = await fs.promises.readdir(gridsPath);
+    return files
+        .filter((file) => file.includes("-grid.hbs"))
+        .map((file) => file.replace("-grid.hbs", ""));
 }
 
 function getGridsSync() {
-    grids = [];
+    let grids = [];
     var files = fs.readdirSync(path.join(__dirname, '../views'));
     files.forEach(file => {
         if(file.includes("-grid.hbs")) {
