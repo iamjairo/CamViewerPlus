@@ -97,7 +97,11 @@ function startServer() {
   if (serverProcess) return;
   serverProcess = spawn(process.execPath, ["app.js"], {
     cwd: ROOT_DIR,
-    stdio: "ignore"
+    stdio: "ignore",
+    env: {
+      ...process.env,
+      ELECTRON_RUN_AS_NODE: "1"
+    }
   });
   serverProcess.on("exit", () => {
     serverProcess = null;
