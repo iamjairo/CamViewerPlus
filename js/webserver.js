@@ -117,11 +117,15 @@ function start() {
     app.get('/grids/:grid', async (req, res) => {
         let freshConfig = config.get();
         let availableGrids = await config.getGrids();
-        let gridName = req.params.grid + "-grid";
+        let requestedGrid = req.params.grid;
+        if (typeof requestedGrid !== 'string' || !availableGrids.includes(requestedGrid)) {
+            return res.render('404', { layout: 'error', errorCode: '404', errorShortDesc: 'Grid not found.', errorDesc: 'The grid you requested does not exist.' });
+        }
+        let gridName = requestedGrid + "-grid";
         if(fs.existsSync("./views/" + gridName + ".hbs")) {
             res.render(gridName, buildTemplateVars(freshConfig, {
                 availableGrids: availableGrids,
-                thisGrid: req.params.grid,
+                thisGrid: requestedGrid,
                 defaultGrid: freshConfig.settings.gridType,
             }));
         } else {
@@ -132,11 +136,15 @@ function start() {
     app.get('/kiosk/:grid', async (req, res) => {
         let freshConfig = config.get();
         let availableGrids = await config.getGrids();
-        let gridName = req.params.grid + "-grid";
+        let requestedGrid = req.params.grid;
+        if (typeof requestedGrid !== 'string' || !availableGrids.includes(requestedGrid)) {
+            return res.render('404', { layout: 'error', errorCode: '404', errorShortDesc: 'Grid not found.', errorDesc: 'The grid you requested does not exist.' });
+        }
+        let gridName = requestedGrid + "-grid";
         if(fs.existsSync("./views/" + gridName + ".hbs")) {
             res.render(gridName, buildTemplateVars(freshConfig, {
                 availableGrids: availableGrids,
-                thisGrid: req.params.grid,
+                thisGrid: requestedGrid,
                 defaultGrid: freshConfig.settings.gridType,
                 kioskMode: true,
             }));
