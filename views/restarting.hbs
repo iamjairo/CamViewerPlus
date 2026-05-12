@@ -24,7 +24,26 @@
     function redir() {
         const queryString = window.location.search;
         const urlParams = new URLSearchParams(queryString);
-        const url = urlParams.get('c')
-        document.location.href = url;
+        const rawUrl = urlParams.get('c');
+
+        if (!rawUrl) {
+            document.location.href = "/";
+            return;
+        }
+
+        try {
+            const parsedUrl = new URL(rawUrl, window.location.origin);
+            const isHttp = parsedUrl.protocol === "http:" || parsedUrl.protocol === "https:";
+            const isSameOrigin = parsedUrl.origin === window.location.origin;
+
+            if (isHttp && isSameOrigin) {
+                document.location.href = parsedUrl.href;
+                return;
+            }
+        } catch (e) {
+            // Invalid URL in query parameter; fall through to safe default.
+        }
+
+        document.location.href = "/";
     }
 </script>
