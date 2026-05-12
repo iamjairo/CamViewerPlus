@@ -8,6 +8,7 @@ const config = require("../js/config");
 const pjson = require('../package.json');
 var pm2 = require('pm2');
 var WebsocketServer = require("ws").Server;
+const rateLimit = require('express-rate-limit');
 
 function buildTemplateVars(configData, extra) {
     const streamMode = configData.settings.streamMode || 'jsmpeg';
@@ -90,6 +91,12 @@ function start() {
     app.use('/favicon-32x32.png', express.static(path.join(__dirname, '../assets/favicon-32x32.png')));
     app.use('/favicon-16x16.png', express.static(path.join(__dirname, '../assets/favicon-16x16.png')));
     app.use('/favicon.ico', express.static(path.join(__dirname, '../assets/favicon.ico')));
+
+    const limiter = rateLimit({
+        windowMs: 15 * 60 * 1000,
+        max: 100
+    });
+    app.use(limiter);
 
     app.get('/', async (req, res) => {
         let freshConfig = config.get();
