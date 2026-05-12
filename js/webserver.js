@@ -8,6 +8,12 @@ const config = require("../js/config");
 const pjson = require('../package.json');
 var pm2 = require('pm2');
 var WebsocketServer = require("ws").Server;
+const rateLimit = require('express-rate-limit');
+
+const gridRouteLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 100
+});
 
 function buildTemplateVars(configData, extra) {
     const streamMode = configData.settings.streamMode || 'jsmpeg';
@@ -114,7 +120,7 @@ function start() {
         }));
     });
 
-    app.get('/grids/:grid', async (req, res) => {
+    app.get('/grids/:grid', gridRouteLimiter, async (req, res) => {
         let freshConfig = config.get();
         let availableGrids = await config.getGrids();
         let gridName = req.params.grid + "-grid";
@@ -129,7 +135,7 @@ function start() {
         }
     });
 
-    app.get('/kiosk/:grid', async (req, res) => {
+    app.get('/kiosk/:grid', gridRouteLimiter, async (req, res) => {
         let freshConfig = config.get();
         let availableGrids = await config.getGrids();
         let gridName = req.params.grid + "-grid";
