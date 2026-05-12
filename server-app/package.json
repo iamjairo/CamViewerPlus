@@ -1,0 +1,51 @@
+{
+  "name": "camviewerplus-server-app",
+  "productName": "CamViewerPlus Server App",
+  "version": "1.0.0",
+  "description": "Native CamViewerPlus server launcher for macOS and Linux.",
+  "main": "main.js",
+  "author": "CamViewerPlus Contributors",
+  "license": "GPL-3.0",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --publish never --dir",
+    "release": "electron-builder --publish never"
+  },
+  "build": {
+    "appId": "com.iamjairo.camviewerplus-server-app",
+    "files": [
+      "main.js",
+      "tray.js",
+      "status.html",
+      "resources/**/*",
+      "package.json"
+    ],
+    "directories": {
+      "buildResources": "resources",
+      "output": "dist"
+    },
+    "mac": {
+      "category": "public.app-category.utilities",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ]
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Utility"
+    }
+  },
+  "devDependencies": {
+    "electron": "^39.8.5",
+    "electron-builder": "^26.8.1"
+  }
+}

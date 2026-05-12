@@ -11,6 +11,12 @@ supports three streaming back-ends:
 | **WebRTC** | < 1 s | MediaMTX | Lowest latency. Uses WHEP. |
 | **JSMpeg** | 3–8 s | built-in | Legacy mode, no extra services needed. |
 
+## Repository structure
+
+- `.` – CamViewerPlus server (Node.js / Express)
+- `client/` – CamViewerPlus Electron desktop client
+- `server-app/` – native Electron launcher for running the server on macOS/Linux without Docker
+
 ---
 
 ## Getting Started
@@ -45,7 +51,7 @@ version: '3'
 services:
   camviewerplus:
     container_name: camviewerplus
-    image: 'fanman03/camviewerplus:2.0.0'
+    image: 'iamjairo/camviewerplus:2.0.0'
     restart: unless-stopped
     ports:
       - '6900:6900'
@@ -74,6 +80,22 @@ volumes:
 5. For HLS/WebRTC mode, run MediaMTX separately and point it at your cameras
    (see `mediamtx.yml` for a configuration template).
 
+### Option D – Native Server App (macOS / Linux, no Docker)
+
+Use the tray-based Electron server app in `server-app/`.
+
+```bash
+cd server-app
+npm install
+npm run start
+```
+
+Build installers:
+
+```bash
+npm run release
+```
+
 ---
 
 ## Configuration (`conf/config.json`)
@@ -89,6 +111,7 @@ Key settings:
 | `cameras[].source` | – | RTSP URL of the camera |
 | `cameras[].position` | – | Zero-based slot index (maps to MediaMTX path `cam{N}`) |
 | `uiPort` | `6980` | Web UI port |
+| `notificationPort` | `3000` | Client-notification WebSocket port |
 | `streamPort` | `6900` | JSMpeg WebSocket port (only used in `jsmpeg` mode) |
 | `gridType` | `4` | Default grid layout |
 | `transportProtocol` | `tcp` | JSMpeg mode only: RTSP transport (`tcp`/`udp`) |
@@ -113,7 +136,22 @@ in that file for details.
 ## Client app
 
 For the best experience (especially WebRTC mode), use the dedicated desktop
-client: [CamViewerPlus Client](https://github.com/iamjairo/CamViewerPlus-Client/)
+client included in this repository under `client/`.
+
+```bash
+cd client
+npm install
+npm run release
+```
+
+Original standalone repository: [CamViewerPlus Client](https://github.com/iamjairo/CamViewerPlus-Client/)
+
+---
+
+## Security notes
+
+- Current upstream chain still includes `ws@7` through `rtsp-relay -> express-ws`; no upstream fix is available at this time.
+- `systeminformation` is inherited via `pm2-sysmonit`; keep Dependabot updates enabled to receive patched releases quickly.
 
 ---
 

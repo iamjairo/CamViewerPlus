@@ -1,0 +1,34 @@
+name: Server CI
+
+on:
+  push:
+    branches: [master]
+    paths-ignore:
+      - "client/**"
+      - "server-app/**"
+  pull_request:
+    branches: [master]
+    paths-ignore:
+      - "client/**"
+      - "server-app/**"
+
+permissions:
+  contents: read
+
+jobs:
+  server:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Smoke test server startup
+        run: |
+          timeout 20s node app.js || code=$?
+          if [ "${code:-0}" -ne 0 ] && [ "${code:-0}" -ne 124 ]; then
+            exit "${code}"
+          fi

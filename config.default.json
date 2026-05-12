@@ -26,6 +26,7 @@
         ],
         "streamPort": "6900",
         "uiPort": "6980",
+        "notificationPort": "3000",
         "transportProtocol": "tcp",
         "quality": "3"
     }
