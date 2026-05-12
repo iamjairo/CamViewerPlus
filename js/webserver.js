@@ -172,7 +172,7 @@ function start() {
     });
 
     app.get('/getGrids', (req, res) => {
-        res.send(config.getGridsSync());
+        res.json(config.getGridsSync());
     });
 
     app.get('/restarting', (req, res) => {
@@ -180,10 +180,10 @@ function start() {
     });
 
     app.get("/restartService", (req, res)=> {
-        res.redirect("/restarting");
         wss.clients.forEach((client) => {
             client.send("service_restart");
         });
+        res.redirect("/restarting");
         setTimeout(() => {
             pm2.connect(function(err) {
                 pm2.restart('camviewer', function(err) {

@@ -17,8 +17,8 @@ export default {
       click: () => {
         let path = app.getPath("userData") + "/config.json";
         fs.unlink(path, () => {});
-        app.relaunch()
-        app.exit()
+        app.relaunch();
+        app.exit();
       }
     }
   ]

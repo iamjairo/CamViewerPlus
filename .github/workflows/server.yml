@@ -12,6 +12,9 @@ on:
       - "client/**"
       - "server-app/**"
 
+permissions:
+  contents: read
+
 jobs:
   server:
     runs-on: ubuntu-latest

@@ -12,6 +12,9 @@ on:
       - "client/**"
       - ".github/workflows/client.yml"
 
+permissions:
+  contents: read
+
 jobs:
   build-client:
     runs-on: ubuntu-latest

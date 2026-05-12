@@ -128,7 +128,15 @@ function readUiPort() {
   const configPath = path.join(ROOT_DIR, "conf", "config.json");
   try {
     const json = JSON.parse(fs.readFileSync(configPath, "utf8"));
-    return Number.parseInt(json?.settings?.uiPort || "6980", 10) || 6980;
+    const uiPortValue = json?.settings?.uiPort;
+    if (uiPortValue === undefined || uiPortValue === null || uiPortValue === "") {
+      return 6980;
+    }
+    const parsed = Number.parseInt(uiPortValue, 10);
+    if (!Number.isFinite(parsed) || parsed <= 0 || parsed > 65535) {
+      return 6980;
+    }
+    return parsed;
   } catch {
     return 6980;
   }

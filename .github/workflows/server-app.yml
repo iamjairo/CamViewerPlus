@@ -12,6 +12,9 @@ on:
       - "server-app/**"
       - ".github/workflows/server-app.yml"
 
+permissions:
+  contents: read
+
 jobs:
   build:
     strategy:
